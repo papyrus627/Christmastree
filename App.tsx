@@ -175,12 +175,7 @@ const App: React.FC = () => {
           <div className="bg-black/50 backdrop-blur-md px-6 py-3 rounded-full text-white text-center">
             <p className="text-lg font-bold">✨ 这是一棵收到的圣诞树 ✨</p>
           </div>
-          <button 
-            onClick={() => window.location.href = window.location.pathname}
-            className="mt-4 text-sm text-white/80 underline hover:text-white"
-          >
-            我也要做一个
-          </button>
+        
         </div>
       )}
     </div>
