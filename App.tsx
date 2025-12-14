@@ -16,21 +16,38 @@ const App: React.FC = () => {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // --- 这一段 useEffect 逻辑保持不变 ---
+ // 1. 启动时检查：我是 A 用户还是 B 用户？
   useEffect(() => {
     const fetchTree = async () => {
       const params = new URLSearchParams(window.location.search);
       const id = params.get('id');
+
       if (id) {
-        setIsReadOnly(true);
-        const { data } = await supabase.from('trees').select('tree_data').eq('id', id).single();
+        setIsReadOnly(true); // 设为只读
+        
+        const { data, error } = await supabase
+          .from('trees')
+          .select('tree_data')
+          .eq('id', id)
+          .single();
+
         if (data && data.tree_data) {
-          setMode(data.tree_data.mode);
+          // 1. 先恢复照片和主题
           setThemeId(data.tree_data.themeId);
           setPhotos(data.tree_data.photos);
-        }
+          
+          // 2. 关键修复：
+          // 先强制设为“分散模式”，确保起始状态正确
+          setMode(TreeMode.SCATTERED); 
+
+          // 3. 给浏览器 800毫秒 的时间准备渲染，然后自动变身！
+          setTimeout(() => {
+            setMode(TreeMode.TREE_SHAPE); 
+          }, 800); 
+        } 
       }
     };
+
     fetchTree();
   }, []);
 
