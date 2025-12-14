@@ -7,6 +7,34 @@ import { supabase } from './supabaseClient';
 // 👇 1. 引入二维码组件
 import QRCode from "react-qr-code";
 
+// --- 新增的压缩工具函数 ---
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        // 限制最大宽度为 1024px (足够手机看了)
+        const maxWidth = 1024;
+        const scaleSize = maxWidth / img.width;
+        const width = img.width > maxWidth ? maxWidth : img.width;
+        const height = img.width > maxWidth ? img.height * scaleSize : img.height;
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        // 压缩质量 0.7 (70%)，转为 JPEG
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(compressedDataUrl);
+      };
+    };
+  });
+};
 const App: React.FC = () => {
   const [mode, setMode] = useState<TreeMode>(TreeMode.SCATTERED);
   const [themeId, setThemeId] = useState<ThemeId>(ThemeId.AURORA_GREEN);
@@ -51,16 +79,29 @@ const App: React.FC = () => {
     fetchTree();
   }, []);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 修改后的上传函数
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      Array.from(e.target.files).forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) setPhotos((prev) => [...prev, event.target!.result as string]);
-        };
-        reader.readAsDataURL(file);
-      });
-      if (mode === TreeMode.SCATTERED) setMode(TreeMode.TREE_SHAPE);
+      const newPhotos: string[] = [];
+      const files = Array.from(e.target.files);
+
+      // 显示“正在处理”提示（可选）
+      // alert("正在压缩图片，请稍等...");
+
+      for (const file of files) {
+        try {
+          const compressed = await compressImage(file);
+          newPhotos.push(compressed);
+        } catch (err) {
+          console.error("图片压缩失败", err);
+        }
+      }
+
+      setPhotos((prev) => [...prev, ...newPhotos]);
+
+      if (mode === TreeMode.SCATTERED) {
+         setMode(TreeMode.TREE_SHAPE);
+      }
     }
   };
 
