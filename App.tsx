@@ -3,104 +3,73 @@ import { Scene } from './components/Scene';
 import { UIOverlay } from './components/UIOverlay';
 import { TreeMode, ThemeId } from './types';
 import { THEMES } from './constants';
-// 引入我们刚才建好的连接器
-import { supabase } from './supabaseClient'; 
+import { supabase } from './supabaseClient';
+// 👇 1. 引入二维码组件
+import QRCode from "react-qr-code";
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<TreeMode>(TreeMode.SCATTERED);
   const [themeId, setThemeId] = useState<ThemeId>(ThemeId.AURORA_GREEN);
   const [photos, setPhotos] = useState<string[]>([]);
   
-  // 新增：状态控制
-  const [isReadOnly, setIsReadOnly] = useState(false); // 是否是 B 用户（只读）
-  const [shareUrl, setShareUrl] = useState<string | null>(null); // 生成的分享链接
-  const [isSaving, setIsSaving] = useState(false); // 保存中的加载状态
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // 1. 启动时检查：我是 A 用户还是 B 用户？
+  // --- 这一段 useEffect 逻辑保持不变 ---
   useEffect(() => {
     const fetchTree = async () => {
       const params = new URLSearchParams(window.location.search);
       const id = params.get('id');
-
       if (id) {
-        // 如果网址里有 id，说明是 B 用户
         setIsReadOnly(true);
-        console.log("检测到分享ID，正在加载...", id);
-        
-        const { data, error } = await supabase
-          .from('trees')
-          .select('tree_data')
-          .eq('id', id)
-          .single();
-
+        const { data } = await supabase.from('trees').select('tree_data').eq('id', id).single();
         if (data && data.tree_data) {
-          // 恢复圣诞树的状态
           setMode(data.tree_data.mode);
           setThemeId(data.tree_data.themeId);
           setPhotos(data.tree_data.photos);
-        } else {
-          console.error("加载失败:", error);
         }
       }
     };
-
     fetchTree();
   }, []);
 
-  // 2. 上传照片逻辑 (保持不变)
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       Array.from(e.target.files).forEach((file) => {
         const reader = new FileReader();
         reader.onload = (event) => {
-          if (event.target?.result) {
-            setPhotos((prev) => [...prev, event.target!.result as string]);
-          }
+          if (event.target?.result) setPhotos((prev) => [...prev, event.target!.result as string]);
         };
         reader.readAsDataURL(file);
       });
-
-      if (mode === TreeMode.SCATTERED) {
-         setMode(TreeMode.TREE_SHAPE);
-      }
+      if (mode === TreeMode.SCATTERED) setMode(TreeMode.TREE_SHAPE);
     }
   };
 
-  // 3. 新增：分享功能 (A 用户点击)
   const handleShare = async () => {
     if (photos.length === 0) {
       alert("请先上传至少一张照片再分享哦！");
       return;
     }
-    
     setIsSaving(true);
     try {
-      // 打包数据
-      const treeData = {
-        mode,
-        themeId,
-        photos
-      };
-
-      // 发送到 Supabase
       const { data, error } = await supabase
         .from('trees')
-        .insert([{ tree_data: treeData }])
+        .insert([{ tree_data: { mode, themeId, photos } }])
         .select();
 
       if (error) throw error;
 
       if (data && data[0]) {
-        // 生成链接
-        const newId = data[0].id;
-        // 自动识别当前是本地还是github pages
-        const baseUrl = window.location.origin + window.location.pathname; 
-        const fullUrl = `${baseUrl}?id=${newId}`;
+        // 👇 这里很重要：确保生成的链接是完整的
+        const baseUrl = window.location.href.split('?')[0]; // 去掉可能存在的旧参数
+        const fullUrl = `${baseUrl}?id=${data[0].id}`;
         setShareUrl(fullUrl);
       }
     } catch (err) {
       console.error(err);
-      alert("保存失败，请检查网络或配置");
+      alert("保存失败，请检查网络");
     } finally {
       setIsSaving(false);
     }
@@ -108,37 +77,38 @@ const App: React.FC = () => {
 
   return (
     <div className="relative w-full h-screen bg-[linear-gradient(to_bottom,#051B16_0%,#3D2E0F_100%)]">
-      {/* 3D 场景永远存在 */}
-      <Scene 
-        mode={mode} 
-        theme={THEMES[themeId]} 
-        photos={photos}
-      />
+      <Scene mode={mode} theme={THEMES[themeId]} photos={photos} />
 
-      {/* --- 界面逻辑分层 --- */}
-
-      {/* 1. 如果生成了链接，显示分享弹窗 */}
+      {/* 👇👇👇 2. 重点修改了这里的弹窗 👇👇👇 */}
       {shareUrl && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80">
-          <div className="bg-white p-6 rounded-lg max-w-sm text-center">
-            <h3 className="text-xl font-bold mb-4 text-black">🎄 圣诞树已生成！</h3>
-            <p className="text-gray-600 mb-2">复制下方链接发给朋友：</p>
-            <input 
-              type="text" 
-              value={shareUrl} 
-              readOnly 
-              className="w-full p-2 border rounded mb-4 text-sm bg-gray-100 text-black"
-            />
-            <div className="flex gap-2 justify-center">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl flex flex-col items-center">
+            <h3 className="text-xl font-bold mb-4 text-black">🎄 扫码查看圣诞树</h3>
+            
+            {/* 二维码显示区域 */}
+            <div className="bg-white p-2 border-2 border-gray-100 rounded-lg mb-4">
+              <QRCode 
+                value={shareUrl} 
+                size={200} 
+                fgColor="#000000" 
+                bgColor="#ffffff" 
+              />
+            </div>
+
+            <p className="text-sm text-gray-500 mb-4">
+              微信扫码如果打不开，请点击右上角<br/>选择“在浏览器打开”
+            </p>
+
+            <div className="flex gap-3 w-full">
               <button 
-                onClick={() => {navigator.clipboard.writeText(shareUrl); alert("已复制！");}}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                onClick={() => {navigator.clipboard.writeText(shareUrl); alert("链接已复制！");}}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200"
               >
                 复制链接
               </button>
               <button 
                 onClick={() => setShareUrl(null)}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                className="flex-1 px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600"
               >
                 关闭
               </button>
@@ -147,7 +117,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 2. 只有在 A 用户模式（非只读）下，才显示原来的 UIOverlay */}
       {!isReadOnly && !shareUrl && (
         <>
           <UIOverlay 
@@ -157,25 +126,22 @@ const App: React.FC = () => {
             setThemeId={setThemeId}
             onUploadPhoto={handlePhotoUpload}
           />
-          
-          {/* 额外的分享按钮，放在右上角 */}
           <button
             onClick={handleShare}
             disabled={isSaving}
-            className="absolute top-4 right-4 z-40 px-6 py-2 bg-yellow-500 text-black font-bold rounded-full shadow-lg hover:bg-yellow-400 transition-all"
+            className="absolute top-4 right-4 z-40 px-6 py-2 bg-yellow-500 text-black font-bold rounded-full shadow-lg hover:bg-yellow-400 transition-all transform hover:scale-105"
           >
-            {isSaving ? "生成中..." : "🎁 生成分享链接"}
+            {isSaving ? "⏳ 生成中..." : "🎁 生成二维码"}
           </button>
         </>
       )}
 
-      {/* 3. 如果是 B 用户（只读模式），显示简单的祝福栏 */}
       {isReadOnly && (
-        <div className="absolute bottom-10 left-0 right-0 z-40 flex flex-col items-center">
-          <div className="bg-black/50 backdrop-blur-md px-6 py-3 rounded-full text-white text-center">
-            <p className="text-lg font-bold">✨ 这是一棵收到的圣诞树 ✨</p>
+        <div className="absolute bottom-10 left-0 right-0 z-40 flex flex-col items-center pointer-events-none">
+          <div className="bg-black/60 backdrop-blur-md px-8 py-4 rounded-full text-white text-center shadow-lg pointer-events-auto">
+            <p className="text-lg font-bold mb-1">✨ 这是朋友送你的圣诞树 ✨</p>
+            
           </div>
-        
         </div>
       )}
     </div>
