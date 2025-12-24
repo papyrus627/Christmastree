@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
-      // 👇 重点：显式指定根目录，确保 Cloudflare 能找到文件
-      base: '/', 
+      // 👇👇👇 重点修改：必须加上你的仓库名，前后都要有斜杠 👇👇👇
+      base: '/Christmastree/',
       
       server: {
         port: 3000,
