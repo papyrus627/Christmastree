@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
-      // 👇👇👇 重点修改：必须加上你的仓库名，前后都要有斜杠 👇👇👇
-      base: '/Christmastree/',
+      // 👇👇👇 核心修改：变成万能的相对路径 👇👇👇
+      base: './', 
       
       server: {
         port: 3000,
@@ -21,6 +21,10 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      // 👇 额外加一个保险，防止打包出现奇怪的路径问题
+      build: {
+        assetsDir: 'assets',
       }
     };
 });
